@@ -7,7 +7,27 @@
   </head>
   <body>
       <script>
+          import frisbeePositions from '../frisbeePositions.js'
           let watchID = null;
+          function determineDistanceAndDirection(startPos, endPos){
+            let distAndDirection = {distance: 0, direction: "", giveClue: false};
+            let [a,b] = startPos;
+            let [x,y] = endPos;
+            distAndDirection.distance = Math.floor(Math.sqrt(Math.pow(Math.abs(a-x), 2) + Math.pow(Math.abs(b-y),2)) * 364000 );
+            if (distAndDirection.distance>20){
+                let ns = ""
+                let ew = ""
+                if(Math.abs(a-x)>20 && a<x){ ns = "North"};
+                if(Math.abs(b-y)>20 && b<y){ ew = "East" };
+                if(Math.abs(a-x)>20 && a>x){ ns = "South"};
+                if(Math.abs(b-y)>20 && b>y){ ew = "West"};
+                distAndDirection.direction = ns + ew;
+            } else {
+                distAndDirection.direction = "You Made It"
+                distAndDirection.giveClue = true
+            }
+            return distAndDirection
+          }
 
           function startWatching() {
               if (navigator.geolocation) {
@@ -16,11 +36,21 @@
                           (position) => {
                             const lat = parseFloat(position.coords.latitude.toFixed(4));
                             const lon = parseFloat(position.coords.longitude.toFixed(4));
+                            let data = {user:{latitude: lat, longitude: lon}}
+                            frisbeePositions.forEach((position, i)=>{
+                                let dataToFrisbee = determineDistanceAndDirection([lat,lon], position)
+                                dataToFrisbee.latitude = position[0]
+                                dataToFrisbee.longitude = position[1]
+                                data.i = dataToFrisbee
+                            })
 
                             // Send the latitude and longitude to the parent container
-                            window.parent.postMessage({ latitude: lat, longitude: lon }, '*');
+                            // and for each frisbee number: latitude, longitude, distance (in feet), direction, clue boolean
+                            window.parent.postMessage(data, '*');
                             console.log("latitude: ", lat)
                             console.log("longitude: ", lon)
+                            console.log("data: ")
+                            console.log(data)
                           },
                           (error) => {
                               switch (error.code) {
