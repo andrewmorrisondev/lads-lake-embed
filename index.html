@@ -42,7 +42,7 @@
                                 let dataToFrisbee = determineDistanceAndDirection([lat,lon], position)
                                 dataToFrisbee.latitude = position[0]
                                 dataToFrisbee.longitude = position[1]
-                                data.i = dataToFrisbee
+                                data[i.toString] = dataToFrisbee
                             })
 
                             // Send the latitude and longitude to the parent container
