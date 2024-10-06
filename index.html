@@ -14,7 +14,8 @@
             let distAndDirection = {distance: 0, direction: "", giveClue: false};
             let [a,b] = startPos;
             let [x,y] = endPos;
-            distAndDirection.distance = Math.floor(Math.sqrt(Math.pow(Math.abs(a-x), 2) + Math.pow(Math.abs(b-y),2)) * 364000 );
+            [a, b, x, y].forEach(distance => distance *= 364000)
+            distAndDirection.distance = Math.floor(Math.sqrt(Math.pow(Math.abs(a-x), 2) + Math.pow(Math.abs(b-y),2)));
             if (distAndDirection.distance>20){
                 let ns = ""
                 let ew = ""
