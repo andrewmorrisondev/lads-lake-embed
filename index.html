@@ -14,8 +14,8 @@
                   if (watchID === null) {
                       watchID = navigator.geolocation.watchPosition(
                           (position) => {
-                              const lat = position.coords.latitude;
-                              const lon = position.coords.longitude;
+                              const lat = position.coords.latitude.toFixed(6);
+                              const lon = position.coords.longitude.toFixed(6);
 
                               // Send the latitude and longitude to the parent container
                               window.parent.postMessage({ latitude: lat, longitude: lon }, '*');
