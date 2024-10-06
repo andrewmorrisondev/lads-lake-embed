@@ -19,6 +19,8 @@
 
                               // Send the latitude and longitude to the parent container
                               window.parent.postMessage({ latitude: lat, longitude: lon }, '*');
+                              console.log("latitude: ", lat)
+                              console.log("longitude: ", lon)
                           },
                           (error) => {
                               switch (error.code) {
