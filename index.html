@@ -11,28 +11,29 @@
           let frisbeePositions = [[40.6964, -73.9101],[40.6965, -73.9102],[40.6966, -73.9103],[40.6966, -73.9104],[40.6966, -73.9105],[40.6966, -73.9106],[40.6966, -73.9107],[40.6966, -73.9108],[40.6966, -73.9109],[40.6966, -73.9110],[40.6966, -73.9111],[40.6955, -73.9095],[40.6950, -73.9093]]
           let watchID = null;
           function determineDistanceAndDirection(startPos, endPos){
-            let distAndDirection = {distance: 0, direction: "", giveClue: 'false'};
+            let distAndDirection = {distance: "0", direction: "", giveClue: 'false'};
             let [a,b] = startPos;
             let [x,y] = endPos;
-            a *= 364000
-            b *= 364000
-            x *= 364000
-            y *= 364000
-            distAndDirection.distance = Math.floor(Math.sqrt(Math.pow(Math.abs(a-x), 2) + Math.pow(Math.abs(b-y),2)));
-            if (distAndDirection.distance>20){
-                let ns = ""
-                let ew = ""
-                if(Math.abs(a-x)>20 && a<x){ ns = "North"};
+            a *= 364000;
+            b *= 364000;
+            x *= 364000;
+            y *= 364000;
+            distAndDirection.distance = Math.floor(Math.sqrt(Math.pow(Math.abs(a-x), 2) + Math.pow(Math.abs(b-y),2))).toString();
+            
+            if (parseInt(distAndDirection.distance) > 20){
+                let ns = "", ew = "";
+                if(Math.abs(a-x)>20 && a<x){ ns = "North" };
                 if(Math.abs(b-y)>20 && b<y){ ew = "East" };
-                if(Math.abs(a-x)>20 && a>x){ ns = "South"};
-                if(Math.abs(b-y)>20 && b>y){ ew = "West"};
+                if(Math.abs(a-x)>20 && a>x){ ns = "South" };
+                if(Math.abs(b-y)>20 && b>y){ ew = "West" };
                 distAndDirection.direction = ns + ew;
             } else {
-                distAndDirection.direction = "You Made It"
-                distAndDirection.giveClue = 'true'
+                distAndDirection.direction = "You Made It";
+                distAndDirection.giveClue = 'true';
             }
-            return distAndDirection
+            return distAndDirection;
           }
+
 
           function startWatching() {
               if (navigator.geolocation) {
