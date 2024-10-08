@@ -11,7 +11,7 @@
           let frisbeePositions = [[40.6964, -73.9101],[40.6965, -73.9102],[40.6966, -73.9103],[40.6966, -73.9104],[40.6966, -73.9105],[40.6966, -73.9106],[40.6966, -73.9107],[40.6966, -73.9108],[40.6966, -73.9109],[40.6966, -73.9110],[40.6966, -73.9111],[40.6955, -73.9095],[40.6950, -73.9093]]
           let watchID = null;
           function determineDistanceAndDirection(startPos, endPos){
-            let distAndDirection = {distance: 0, direction: "", giveClue: false};
+            let distAndDirection = {distance: 0, direction: "", giveClue: 'false'};
             let [a,b] = startPos;
             let [x,y] = endPos;
             a *= 364000
@@ -29,7 +29,7 @@
                 distAndDirection.direction = ns + ew;
             } else {
                 distAndDirection.direction = "You Made It"
-                distAndDirection.giveClue = true
+                distAndDirection.giveClue = 'true'
             }
             return distAndDirection
           }
