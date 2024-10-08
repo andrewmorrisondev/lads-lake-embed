@@ -7,11 +7,10 @@
   </head>
   <body>
       <script>
-        //   import frisbeePositions from '../frisbeePositions.js'
 
         // BROOKLYN FRISBEES
         //   let frisbeePositions = [[40.6964, -73.9101],[40.6965, -73.9102],[40.6966, -73.9103],[40.6966, -73.9104],[40.6966, -73.9105],[40.6966, -73.9106],[40.6966, -73.9107],[40.6966, -73.9108],[40.6966, -73.9109],[40.6966, -73.9110],[40.6966, -73.9111],[40.6955, -73.9095],[40.6950, -73.9093]]
-
+        
         // LG FRISBEES
         let frisbeePositions = [
             [43.4015, -73.7230],
@@ -29,8 +28,11 @@
             [43.4011441316986, -73.72244494337478]
         ];
 
-          let watchID = null;
-          function determineDistanceAndDirection(startPos, endPos){
+        let watchID = null;
+        let lastLat = null;
+        let lastLon = null;
+
+        function determineDistanceAndDirection(startPos, endPos){
             let distAndDirection = {distance: "0", direction: "", giveClue: 'false'};
             let [a,b] = startPos;
             let [x,y] = endPos;
@@ -52,72 +54,93 @@
                 distAndDirection.giveClue = 'true';
             }
             return distAndDirection;
-          }
+        }
 
+        function startWatching() {
+            if (navigator.geolocation) {
+                if (watchID === null) {
+                    watchID = navigator.geolocation.watchPosition(
+                        (position) => {
+                            // Only process the position if the accuracy is below 20 meters
+                            if (position.coords.accuracy > 20) {
+                                console.log("Position accuracy not sufficient: " + position.coords.accuracy + " meters");
+                                return;
+                            }
 
-          function startWatching() {
-              if (navigator.geolocation) {
-                  if (watchID === null) {
-                      watchID = navigator.geolocation.watchPosition(
-                          (position) => {
-                            const lat = parseFloat(position.coords.latitude);
-                            const lon = parseFloat(position.coords.longitude);
-                            let data = {user:{latitude: lat, longitude: lon}}
-                            frisbeePositions.forEach((position, i)=>{
-                                let dataToFrisbee = determineDistanceAndDirection([lat,lon], position)
-                                dataToFrisbee.latitude = position[0]
-                                dataToFrisbee.longitude = position[1]
-                                data[`fris${i + 1}`] = dataToFrisbee
-                            })
+                            const lat = position.coords.latitude;
+                            const lon = position.coords.longitude;
+
+                            // Ignore small changes in position (e.g., less than 0.00001 degrees)
+                            if (lastLat !== null && lastLon !== null) {
+                                const latDifference = Math.abs(lat - lastLat);
+                                const lonDifference = Math.abs(lon - lastLon);
+                                if (latDifference < 0.00001 && lonDifference < 0.00001) {
+                                    // Position change is too small, ignore this update
+                                    console.log("Small position change, ignoring...");
+                                    return;
+                                }
+                            }
+
+                            // Update last known position
+                            lastLat = lat;
+                            lastLon = lon;
+
+                            let data = { user: { latitude: lat, longitude: lon } };
+                            frisbeePositions.forEach((position, i) => {
+                                let dataToFrisbee = determineDistanceAndDirection([lat, lon], position);
+                                dataToFrisbee.latitude = position[0];
+                                dataToFrisbee.longitude = position[1];
+                                data[`fris${i + 1}`] = dataToFrisbee;
+                            });
 
                             // Send the latitude and longitude to the parent container
                             // and for each frisbee number: latitude, longitude, distance (in feet), direction, clue boolean
                             window.parent.postMessage(data, '*');
-                            console.log("latitude: ", lat)
-                            console.log("longitude: ", lon)
-                            console.log("data: ")
-                            console.log(data)
-                          },
-                          (error) => {
-                              switch (error.code) {
-                                  case error.PERMISSION_DENIED:
-                                      console.error('User denied the request for Geolocation.');
-                                      break;
-                                  case error.POSITION_UNAVAILABLE:
-                                      console.error('Location information is unavailable.');
-                                      break;
-                                  case error.TIMEOUT:
-                                      console.error('The request to get user location timed out.');
-                                      break;
-                                  case error.UNKNOWN_ERROR:
-                                      console.error('An unknown error occurred.');
-                                      break;
-                              }
-                          },
-                          {
+                            console.log("latitude: ", lat);
+                            console.log("longitude: ", lon);
+                            console.log("data: ");
+                            console.log(data);
+                        },
+                        (error) => {
+                            switch (error.code) {
+                                case error.PERMISSION_DENIED:
+                                    console.error('User denied the request for Geolocation.');
+                                    break;
+                                case error.POSITION_UNAVAILABLE:
+                                    console.error('Location information is unavailable.');
+                                    break;
+                                case error.TIMEOUT:
+                                    console.error('The request to get user location timed out.');
+                                    break;
+                                case error.UNKNOWN_ERROR:
+                                    console.error('An unknown error occurred.');
+                                    break;
+                            }
+                        },
+                        {
                             enableHighAccuracy: true,
-                            timeout: 5000,
-                            maximumAge: 0,
-                          }
-                      );
-                  } else {
-                      console.log('Already watching position.');
-                  }
-              } else {
-                  console.error('Geolocation is not supported by this browser.');
-              }
-          }
+                            timeout: 10000,  // Increase timeout to 10 seconds for better accuracy
+                            maximumAge: 0    // Ensure fresh location data, no cached values
+                        }
+                    );
+                } else {
+                    console.log('Already watching position.');
+                }
+            } else {
+                console.error('Geolocation is not supported by this browser.');
+            }
+        }
 
-          function stopWatching() {
-              if (watchID !== null) {
-                  navigator.geolocation.clearWatch(watchID);
-                  console.log('Stopped watching position.');
-                  watchID = null;
-              }
-          }
+        function stopWatching() {
+            if (watchID !== null) {
+                navigator.geolocation.clearWatch(watchID);
+                console.log('Stopped watching position.');
+                watchID = null;
+            }
+        }
 
-          // Automatically start watching when the iframe loads
-          window.onload = startWatching;
+        // Automatically start watching when the iframe loads
+        window.onload = startWatching;
       </script>
   </body>
 </html>
