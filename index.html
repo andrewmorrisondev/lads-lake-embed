@@ -56,6 +56,9 @@
             }
         }
 
+        // BK FRISBEE positions
+        // let frisbeePositions = [[40.6964, -73.9101],[40.6965, -73.9102],[40.6966, -73.9103],[40.6966, -73.9104],[40.6966, -73.9105],[40.6966, -73.9106],[40.6966, -73.9107],[40.6966, -73.9108],[40.6966, -73.9109],[40.6966, -73.9110],[40.6966, -73.9111],[40.6955, -73.9095],[40.6950, -73.9093]]
+
         // LG FRISBEE positions
         let frisbeePositions = [
             [43.4015, -73.7230],
@@ -73,15 +76,12 @@
             [43.40114, -73.72244]
         ];
 
-
-        // // BK FRISBEE positions
-        // let frisbeePositions = [[40.6964, -73.9101],[40.6965, -73.9102],[40.6966, -73.9103],[40.6966, -73.9104],[40.6966, -73.9105],[40.6966, -73.9106],[40.6966, -73.9107],[40.6966, -73.9108],[40.6966, -73.9109],[40.6966, -73.9110],[40.6966, -73.9111],[40.6955, -73.9095],[40.6950, -73.9093]]
-
         let watchID = null;
         let lastLat = null;
         let lastLon = null;
         let positionBuffer = [];
         let acceleration = { x: 0, y: 0, z: 0 };
+        let firstReading = true; // Flag to track the first reading
         const bufferSize = 10;
         const bufferInterval = 200; // Check every 200ms
         const reportInterval = 2000; // Report every 2 seconds
@@ -141,112 +141,125 @@
             return distAndDirection;
         }
 
-        function startWatching() {
-            if (navigator.geolocation) {
-                if (watchID === null) {
-                    watchID = navigator.geolocation.watchPosition(
-                        (position) => {
-                            // Push current position into the buffer
-                            positionBuffer.push({
-                                lat: position.coords.latitude,
-                                lon: position.coords.longitude,
-                                accuracy: position.coords.accuracy
-                            });
-
-                            // Keep the buffer size fixed
-                            if (positionBuffer.length > bufferSize) {
-                                positionBuffer.shift();
-                            }
-                        },
-                        (error) => {
-                            switch (error.code) {
-                                case error.PERMISSION_DENIED:
-                                    logMessage('User denied the request for Geolocation.');
-                                    break;
-                                case error.POSITION_UNAVAILABLE:
-                                    logMessage('Location information is unavailable.');
-                                    break;
-                                case error.TIMEOUT:
-                                    logMessage('The request to get user location timed out.');
-                                    break;
-                                case error.UNKNOWN_ERROR:
-                                    logMessage('An unknown error occurred.');
-                                    break;
-                            }
-                        },
-                        {
-                            enableHighAccuracy: true,
-                            timeout: 10000,  // Increase timeout to 10 seconds for better accuracy
-                            maximumAge: 0    // Ensure fresh location data, no cached values
-                        }
-                    );
-                } else {
-                    logMessage('Already watching position.');
-                }
-
-                // Set an interval to process the buffer every 2 seconds
-                setInterval(() => {
-                    if (positionBuffer.length === 0) return;
-
-                    // Calculate the average position from the buffer
-                    const avgPosition = positionBuffer.reduce((acc, pos) => {
-                        acc.lat += pos.lat;
-                        acc.lon += pos.lon;
-                        acc.accuracy += pos.accuracy;
-                        return acc;
-                    }, {lat: 0, lon: 0, accuracy: 0});
-
-                    avgPosition.lat /= positionBuffer.length;
-                    avgPosition.lon /= positionBuffer.length;
-                    avgPosition.accuracy /= positionBuffer.length;
-
-                    // Ignore updates with poor accuracy
-                    if (avgPosition.accuracy > 20) {
-                        logMessage("Position accuracy not sufficient: " + avgPosition.accuracy + " meters");
-                        return;
-                    }
-
-                    // Use Kalman filter to smooth the position
-                    const filteredLat = kalmanLat.update(avgPosition.lat);
-                    const filteredLon = kalmanLon.update(avgPosition.lon);
-
-                    // Predict next state based on acceleration
-                    kalmanLat.predict(acceleration.x);
-                    kalmanLon.predict(acceleration.y);
-
-                    // Ignore small changes in position (e.g., less than 0.00001 degrees)
-                    if (lastLat !== null && lastLon !== null) {
-                        const latDifference = Math.abs(filteredLat - lastLat);
-                        const lonDifference = Math.abs(filteredLon - lastLon);
-                        if (latDifference < 0.00001 && lonDifference < 0.00001) {
-                            logMessage("Small position change, ignoring...");
-                            return;
-                        }
-                    }
-
-                    // Update last known position
-                    lastLat = filteredLat;
-                    lastLon = filteredLon;
-
-                    // Create data to send to the parent container
-                    let data = { user: { latitude: filteredLat, longitude: filteredLon } };
-                    frisbeePositions.forEach((position, i) => {
-                        let dataToFrisbee = determineDistanceAndDirection([filteredLat, filteredLon], position);
-                        dataToFrisbee.latitude = position[0];
-                        dataToFrisbee.longitude = position[1];
-                        data[`fris${i + 1}`] = dataToFrisbee;
+        // Function to start watching geolocation
+function startWatching() {
+    if (navigator.geolocation) {
+        if (watchID === null) {
+            watchID = navigator.geolocation.watchPosition(
+                (position) => {
+                    positionBuffer.push({
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude,
+                        accuracy: position.coords.accuracy
                     });
 
-                    // Send the data to the parent container
-                    window.parent.postMessage(data, '*');
-                    logMessage("Filtered latitude: " + filteredLat + ", longitude: " + filteredLon);
-                    logMessage("Data sent to parent: " + JSON.stringify(data));
-
-                }, reportInterval); // Every 2 seconds
-            } else {
-                logMessage('Geolocation is not supported by this browser.');
-            }
+                    // Keep the buffer size fixed
+                    if (positionBuffer.length > bufferSize) {
+                        positionBuffer.shift();
+                    }
+                },
+                (error) => {
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            logMessage('User denied the request for Geolocation.');
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            logMessage('Location information is unavailable.');
+                            break;
+                        case error.TIMEOUT:
+                            logMessage('The request to get user location timed out.');
+                            break;
+                        case error.UNKNOWN_ERROR:
+                            logMessage('An unknown error occurred.');
+                            break;
+                    }
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,  // Increase timeout to 10 seconds for better accuracy
+                    maximumAge: 0    // Ensure fresh location data, no cached values
+                }
+            );
+        } else {
+            logMessage('Already watching position.');
         }
+
+        let readingCount = 0;
+        const initialFilterLimit = 5; // Reduce Kalman filter effect for the first few readings
+
+        // Set an interval to process the buffer every 2 seconds
+        setInterval(() => {
+            if (positionBuffer.length === 0) return;
+
+            const avgPosition = positionBuffer.reduce((acc, pos) => {
+                acc.lat += pos.lat;
+                acc.lon += pos.lon;
+                acc.accuracy += pos.accuracy;
+                return acc;
+            }, {lat: 0, lon: 0, accuracy: 0});
+
+            avgPosition.lat /= positionBuffer.length;
+            avgPosition.lon /= positionBuffer.length;
+            avgPosition.accuracy /= positionBuffer.length;
+
+            // Ignore updates with poor accuracy
+            if (avgPosition.accuracy > 20) {
+                logMessage("Position accuracy not sufficient: " + avgPosition.accuracy + " meters");
+                return;
+            }
+
+            // For the first few readings, bypass or reduce Kalman filter influence
+            let filteredLat = avgPosition.lat;
+            let filteredLon = avgPosition.lon;
+
+            if (readingCount < initialFilterLimit) {
+                filteredLat = avgPosition.lat; // Trust the GPS data more initially
+                filteredLon = avgPosition.lon;
+                logMessage("First readings - Trusting GPS data.");
+            } else {
+                // Use Kalman filter to smooth the position
+                filteredLat = kalmanLat.update(avgPosition.lat);
+                filteredLon = kalmanLon.update(avgPosition.lon);
+
+                // Predict next state based on acceleration
+                kalmanLat.predict(acceleration.x);
+                kalmanLon.predict(acceleration.y);
+            }
+
+            // Skip small position changes if within a threshold
+            const latDifference = Math.abs(filteredLat - lastLat);
+            const lonDifference = Math.abs(filteredLon - lastLon);
+            const minDifference = 0.000001; // Adjust this threshold for your needs
+
+            if (latDifference < minDifference && lonDifference < minDifference) {
+                logMessage("Small position change, ignoring...");
+                return;
+            }
+
+            lastLat = filteredLat;
+            lastLon = filteredLon;
+
+            // Create data to send to the parent container
+            let data = { user: { latitude: filteredLat, longitude: filteredLon } };
+            frisbeePositions.forEach((position, i) => {
+                let dataToFrisbee = determineDistanceAndDirection([filteredLat, filteredLon], position);
+                dataToFrisbee.latitude = position[0];
+                dataToFrisbee.longitude = position[1];
+                data[`fris${i + 1}`] = dataToFrisbee;
+            });
+
+            // Send the data to the parent container
+            window.parent.postMessage(data, '*');
+            logMessage("Filtered latitude: " + filteredLat + ", longitude: " + filteredLon);
+            logMessage("Data sent to parent: " + JSON.stringify(data));
+
+            readingCount++; // Increment the reading count
+        }, reportInterval); // Every 2 seconds
+    } else {
+        logMessage('Geolocation is not supported by this browser.');
+    }
+}
+
 
         function stopWatching() {
             if (watchID !== null) {
