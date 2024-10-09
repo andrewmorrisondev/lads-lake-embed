@@ -76,7 +76,11 @@
         let watchID = null;
         let lastLat = null;
         let lastLon = null;
+        let positionBuffer = [];
         let acceleration = { x: 0, y: 0, z: 0 };
+        const bufferSize = 10;
+        const bufferInterval = 200; // Check every 200ms
+        const reportInterval = 2000; // Report every 2 seconds
 
         // Kalman Filter for Latitude and Longitude with control input (acceleration)
         const kalmanLat = new KalmanFilter({ R: 0.01, Q: 0.001, A: 1, B: 1, C: 1 });
@@ -138,41 +142,17 @@
                 if (watchID === null) {
                     watchID = navigator.geolocation.watchPosition(
                         (position) => {
-                            const lat = position.coords.latitude;
-                            const lon = position.coords.longitude;
-
-                            // Use Kalman filter to smooth the position with acceleration as control input
-                            const filteredLat = kalmanLat.update(lat);
-                            const filteredLon = kalmanLon.update(lon);
-
-                            // Predict based on acceleration for next state
-                            kalmanLat.predict(acceleration.x);
-                            kalmanLon.predict(acceleration.y);
-
-                            // Ignore small changes in position (e.g., less than 0.00001 degrees)
-                            if (lastLat !== null && lastLon !== null) {
-                                const latDifference = Math.abs(filteredLat - lastLat);
-                                const lonDifference = Math.abs(filteredLon - lastLon);
-                                if (latDifference < 0.00001 && lonDifference < 0.00001) {
-                                    logMessage("Small position change, ignoring...");
-                                    return;
-                                }
-                            }
-
-                            // Update last known position
-                            lastLat = filteredLat;
-                            lastLon = filteredLon;
-
-                            let data = { user: { latitude: filteredLat, longitude: filteredLon } };
-                            frisbeePositions.forEach((position, i) => {
-                                let dataToFrisbee = determineDistanceAndDirection([filteredLat, filteredLon], position);
-                                dataToFrisbee.latitude = position[0];
-                                dataToFrisbee.longitude = position[1];
-                                data[`fris${i + 1}`] = dataToFrisbee;
+                            // Push current position into the buffer
+                            positionBuffer.push({
+                                lat: position.coords.latitude,
+                                lon: position.coords.longitude,
+                                accuracy: position.coords.accuracy
                             });
 
-                            // Log the filtered latitude and longitude to the page
-                            logMessage(`Filtered Latitude: ${filteredLat}, Longitude: ${filteredLon}`);
+                            // Keep the buffer size fixed
+                            if (positionBuffer.length > bufferSize) {
+                                positionBuffer.shift();
+                            }
                         },
                         (error) => {
                             switch (error.code) {
@@ -199,6 +179,66 @@
                 } else {
                     logMessage('Already watching position.');
                 }
+
+                // Set an interval to process the buffer every 2 seconds
+                setInterval(() => {
+                    if (positionBuffer.length === 0) return;
+
+                    // Calculate the average position from the buffer
+                    const avgPosition = positionBuffer.reduce((acc, pos) => {
+                        acc.lat += pos.lat;
+                        acc.lon += pos.lon;
+                        acc.accuracy += pos.accuracy;
+                        return acc;
+                    }, {lat: 0, lon: 0, accuracy: 0});
+
+                    avgPosition.lat /= positionBuffer.length;
+                    avgPosition.lon /= positionBuffer.length;
+                    avgPosition.accuracy /= positionBuffer.length;
+
+                    // Ignore updates with poor accuracy
+                    if (avgPosition.accuracy > 20) {
+                        logMessage("Position accuracy not sufficient: " + avgPosition.accuracy + " meters");
+                        return;
+                    }
+
+                    // Use Kalman filter to smooth the position
+                    const filteredLat = kalmanLat.update(avgPosition.lat);
+                    const filteredLon = kalmanLon.update(avgPosition.lon);
+
+                    // Predict next state based on acceleration
+                    kalmanLat.predict(acceleration.x);
+                    kalmanLon.predict(acceleration.y);
+
+                    // Ignore small changes in position (e.g., less than 0.00001 degrees)
+                    if (lastLat !== null && lastLon !== null) {
+                        const latDifference = Math.abs(filteredLat - lastLat);
+                        const lonDifference = Math.abs(filteredLon - lastLon);
+                        if (latDifference < 0.00001 && lonDifference < 0.00001) {
+                            logMessage("Small position change, ignoring...");
+                            return;
+                        }
+                    }
+
+                    // Update last known position
+                    lastLat = filteredLat;
+                    lastLon = filteredLon;
+
+                    // Create data to send to the parent container
+                    let data = { user: { latitude: filteredLat, longitude: filteredLon } };
+                    frisbeePositions.forEach((position, i) => {
+                        let dataToFrisbee = determineDistanceAndDirection([filteredLat, filteredLon], position);
+                        dataToFrisbee.latitude = position[0];
+                        dataToFrisbee.longitude = position[1];
+                        data[`fris${i + 1}`] = dataToFrisbee;
+                    });
+
+                    // Send the data to the parent container
+                    window.parent.postMessage(data, '*');
+                    logMessage("Filtered latitude: " + filteredLat + ", longitude: " + filteredLon);
+                    logMessage("Data sent to parent: " + JSON.stringify(data));
+
+                }, reportInterval); // Every 2 seconds
             } else {
                 logMessage('Geolocation is not supported by this browser.');
             }
