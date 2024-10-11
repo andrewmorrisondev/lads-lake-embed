@@ -1,12 +1,17 @@
 <!DOCTYPE html>
-<html lang='en'>
-<head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Geolocation iFrame</title>
-</head>
-<body>
-    <script>
+  <html lang='en'>
+  <head>
+      <meta charset='UTF-8'>
+      <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+      <title>Geolocation iFrame</title>
+  </head>
+  <body>
+      <script>
+        //   import frisbeePositions from '../frisbeePositions.js'
+
+        // BROOKLYN FRISBEES
+        //   let frisbeePositions = [[40.6964, -73.9101],[40.6965, -73.9102],[40.6966, -73.9103],[40.6966, -73.9104],[40.6966, -73.9105],[40.6966, -73.9106],[40.6966, -73.9107],[40.6966, -73.9108],[40.6966, -73.9109],[40.6966, -73.9110],[40.6966, -73.9111],[40.6955, -73.9095],[40.6950, -73.9093]]
+
         // LG FRISBEES
         let frisbeePositions = [
             [43.4015, -73.7230],
@@ -24,15 +29,8 @@
             [43.4011441316986, -73.72244494337478]
         ];
 
-        let watchID = null;
-        let lastLat = null;
-        let lastLon = null;
-        let positionBuffer = [];
-        const bufferSize = 10;
-        const bufferInterval = 200; // Check every 200ms
-        const reportInterval = 2000; // Report every 2 seconds
-
-        function determineDistanceAndDirection(startPos, endPos){
+          let watchID = null;
+          function determineDistanceAndDirection(startPos, endPos){
             let distAndDirection = {distance: "0", direction: "", giveClue: 'false'};
             let [a,b] = startPos;
             let [x,y] = endPos;
@@ -54,108 +52,72 @@
                 distAndDirection.giveClue = 'true';
             }
             return distAndDirection;
-        }
+          }
 
-        function startWatching() {
-            if (navigator.geolocation) {
-                if (watchID === null) {
-                    watchID = navigator.geolocation.watchPosition(
-                        (position) => {
-                            // Push current position into the buffer
-                            positionBuffer.push({
-                                lat: position.coords.latitude,
-                                lon: position.coords.longitude,
-                                accuracy: position.coords.accuracy
-                            });
 
-                            // Keep the buffer size fixed
-                            if (positionBuffer.length > bufferSize) {
-                                positionBuffer.shift();
-                            }
-                        },
-                        (error) => {
-                            switch (error.code) {
-                                case error.PERMISSION_DENIED:
-                                    console.error('User denied the request for Geolocation.');
-                                    break;
-                                case error.POSITION_UNAVAILABLE:
-                                    console.error('Location information is unavailable.');
-                                    break;
-                                case error.TIMEOUT:
-                                    console.error('The request to get user location timed out.');
-                                    break;
-                                case error.UNKNOWN_ERROR:
-                                    console.error('An unknown error occurred.');
-                                    break;
-                            }
-                        },
-                        {
+          function startWatching() {
+              if (navigator.geolocation) {
+                  if (watchID === null) {
+                      watchID = navigator.geolocation.watchPosition(
+                          (position) => {
+                            const lat = parseFloat(position.coords.latitude);
+                            const lon = parseFloat(position.coords.longitude);
+                            let data = {user:{latitude: lat, longitude: lon}}
+                            frisbeePositions.forEach((position, i)=>{
+                                let dataToFrisbee = determineDistanceAndDirection([lat,lon], position)
+                                dataToFrisbee.latitude = position[0]
+                                dataToFrisbee.longitude = position[1]
+                                data[`fris${i + 1}`] = dataToFrisbee
+                            })
+
+                            // Send the latitude and longitude to the parent container
+                            // and for each frisbee number: latitude, longitude, distance (in feet), direction, clue boolean
+                            window.parent.postMessage(data, '*');
+                            console.log("latitude: ", lat)
+                            console.log("longitude: ", lon)
+                            console.log("data: ")
+                            console.log(data)
+                          },
+                          (error) => {
+                              switch (error.code) {
+                                  case error.PERMISSION_DENIED:
+                                      console.error('User denied the request for Geolocation.');
+                                      break;
+                                  case error.POSITION_UNAVAILABLE:
+                                      console.error('Location information is unavailable.');
+                                      break;
+                                  case error.TIMEOUT:
+                                      console.error('The request to get user location timed out.');
+                                      break;
+                                  case error.UNKNOWN_ERROR:
+                                      console.error('An unknown error occurred.');
+                                      break;
+                              }
+                          },
+                          {
                             enableHighAccuracy: true,
-                            timeout: 10000,  // Increase timeout to 10 seconds for better accuracy
-                            maximumAge: 0    // Ensure fresh location data, no cached values
-                        }
-                    );
-                } else {
-                    console.log('Already watching position.');
-                }
+                            timeout: 5000,
+                            maximumAge: 0,
+                          }
+                      );
+                  } else {
+                      console.log('Already watching position.');
+                  }
+              } else {
+                  console.error('Geolocation is not supported by this browser.');
+              }
+          }
 
-                // Set an interval to process the buffer every 2 seconds
-                setInterval(() => {
-                    if (positionBuffer.length === 0) return;
+          function stopWatching() {
+              if (watchID !== null) {
+                  navigator.geolocation.clearWatch(watchID);
+                  console.log('Stopped watching position.');
+                  watchID = null;
+              }
+          }
 
-                    // Calculate the average position from the buffer
-                    const avgPosition = positionBuffer.reduce((acc, pos) => {
-                        acc.lat += pos.lat;
-                        acc.lon += pos.lon;
-                        acc.accuracy += pos.accuracy;
-                        return acc;
-                    }, {lat: 0, lon: 0, accuracy: 0});
-
-                    avgPosition.lat /= positionBuffer.length;
-                    avgPosition.lon /= positionBuffer.length;
-                    avgPosition.accuracy /= positionBuffer.length;
-
-                    // Ignore updates with poor accuracy
-                    if (avgPosition.accuracy > 20) {
-                        console.log("Position accuracy not sufficient: " + avgPosition.accuracy + " meters");
-                        return;
-                    }
-
-                    // Update last known position
-                    lastLat = avgPosition.lat;
-                    lastLon = avgPosition.lon;
-
-                    // Create data to send to the parent container
-                    let data = { user: { latitude: avgPosition.lat, longitude: avgPosition.lon } };
-                    frisbeePositions.forEach((position, i) => {
-                        let dataToFrisbee = determineDistanceAndDirection([avgPosition.lat, avgPosition.lon], position);
-                        dataToFrisbee.latitude = position[0];
-                        dataToFrisbee.longitude = position[1];
-                        data[`fris${i + 1}`] = dataToFrisbee;
-                    });
-
-                    // Send the data to the parent container
-                    window.parent.postMessage(data, '*');
-                    console.log("Averaged latitude: ", avgPosition.lat);
-                    console.log("Averaged longitude: ", avgPosition.lon);
-                    console.log("data: ", data);
-
-                }, reportInterval); // Every 2 seconds
-            } else {
-                console.error('Geolocation is not supported by this browser.');
-            }
-        }
-
-        function stopWatching() {
-            if (watchID !== null) {
-                navigator.geolocation.clearWatch(watchID);
-                console.log('Stopped watching position.');
-                watchID = null;
-            }
-        }
-
-        // Automatically start watching when the iframe loads
-        window.onload = startWatching;
-    </script>
-</body>
+          // Automatically start watching when the iframe loads
+          window.onload = startWatching;
+      </script>
+  </body>
 </html>
